@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Tracker Pro</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>🎂 Birthday Tracker</h1>
+            <p id="today-date" class="date-display"></p>
+            
+            <div class="sync-status-bar">
+                <span id="status-dot" class="dot-red"></span>
+                <span id="status-text">Google Calendar: Disconnected</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="input-group">
+                <input type="text" id="nameInput" placeholder="Person's Name">
+                <input type="date" id="dateInput">
+                <button onclick="addBirthday()" class="btn-add">Add & Sync</button>
+            </section>
+
+            <button id="syncBtn" onclick="handleSync()" class="btn-sync">
+                <img src="https://www.gstatic.com/images/branding/product/1x/calendar_2020q4_48dp.png" alt="Google" width="18">
+                Link Google Account
+            </button>
+
+            <div class="list-container">
+                <h3>Upcoming Birthdays</h3>
+                <ul id="birthdayList"></ul>
+            </div>
+        </main>
+        
+        <footer>
+            <button onclick="testEmail()" class="btn-test">Test Email Connection</button>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

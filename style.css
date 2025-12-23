@@ -1,0 +1,109 @@
+:root {
+    --primary: #4285F4;
+    --success: #28a745;
+    --danger: #dc3545;
+    --warning: #fbc02d;
+    --bg: #f4f7f9;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.app-container {
+    background: white;
+    width: 100%;
+    max-width: 420px;
+    padding: 25px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.date-display { color: #666; margin: 5px 0; font-size: 0.9rem; }
+
+.sync-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    margin: 10px 0;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.dot-red { width: 8px; height: 8px; background: var(--danger); border-radius: 50%; }
+.dot-green { 
+    width: 8px; height: 8px; background: #2ecc71; border-radius: 50%; 
+    box-shadow: 0 0 5px #2ecc71; 
+}
+
+.input-group { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+
+input {
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+button {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.btn-add { background-color: var(--success); color: white; }
+.btn-sync {
+    background-color: white;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.days-badge {
+    background: #e1f5fe;
+    color: #0288d1;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+}
+
+li {
+    background: #fff;
+    border: 1px solid #eee;
+    margin-bottom: 10px;
+    padding: 15px;
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.is-today {
+    background: #fff9c4;
+    border: 2px solid var(--warning);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.btn-test { background: transparent; color: #999; font-size: 0.8rem; width: 100%; border: 1px dashed #ccc; }
