@@ -1,15 +1,20 @@
 // --- CONFIGURATION ---
+// Replace these with your actual IDs from Google and EmailJS
 const CLIENT_ID = '242836404042-q24h5h9hr3p580dbve5hgcpu7eminmcu.apps.googleusercontent.com';
-let accessToken = localStorage.getItem('google_access_token');
+const EMAILJS_PUBLIC_KEY = 'bOGD3izt9TkU0Z4NU'; 
+const EMAILJS_SERVICE_ID = 'service_6ixkxxx';
+const EMAILJS_TEMPLATE_ID = 'template_9zj0jsp';
+
+let birthdays = JSON.parse(localStorage.getItem('birthdays')) || [];
 let tokenClient;
+let accessToken = localStorage.getItem('google_access_token');
 
-// --- INITIALIZE APP ---
+// --- INITIALIZE ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Show current date
     document.getElementById('today-date').innerText = new Date().toDateString();
-
-    // Initialize Google Identity Services (GIS)
-    // This is the modern way to handle Google Auth
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+    
+    // Setup Google Auth Client
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/calendar.events',
@@ -17,131 +22,149 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tokenResponse.access_token) {
                 accessToken = tokenResponse.access_token;
                 localStorage.setItem('google_access_token', accessToken);
-                updateStatusUI(true);
-                console.log("Google Account Linked Successfully");
+                updateStatus(true);
+                syncExistingToGoogle();
             }
         },
     });
 
-    // Auto-detect if we already have a token
-    if (accessToken) {
-        updateStatusUI(true);
-    }
-    renderList();
+    if (accessToken) updateStatus(true);
+    renderBirthdays();
 });
 
-// --- GOOGLE AUTH HANDLER ---
-function handleAuth() {
-    // Request access token with 'select_account' to allow user to switch if needed
-    // This also helps bypass the "Testing" expiration issues
-    tokenClient.requestAccessToken({ prompt: 'select_account' });
+function updateStatus(isConnected) {
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    dot.className = isConnected ? 'dot-green' : 'dot-red';
+    text.innerText = isConnected ? 'Google Calendar: Linked' : 'Google Calendar: Disconnected';
 }
 
-// --- CORE FUNCTION: ADD & SET ALARM ---
-async function addAndForget() {
-    const nameInput = document.getElementById('nameInput');
-    const dateInput = document.getElementById('dateInput');
-    const name = nameInput.value.trim();
-    const date = dateInput.value;
+// --- CORE LOGIC ---
+async function addBirthday() {
+    const name = document.getElementById('nameInput').value.trim();
+    const date = document.getElementById('dateInput').value;
+    if (!name || !date) return alert("Please enter a name and date!");
 
-    if (!accessToken) {
-        alert("Action Required: Please click 'Link Google Account' first.");
-        return;
+    let newBday = { 
+        id: Date.now().toString(), 
+        name, 
+        date, 
+        calendarEventId: null 
+    };
+
+    // If user is logged into Google, create the 6 AM event immediately
+    if (accessToken) {
+        const eventId = await createGoogleEvent(newBday);
+        newBday.calendarEventId = eventId;
     }
 
-    if (!name || !date) {
-        alert("Please provide both a name and a date.");
-        return;
-    }
+    birthdays.push(newBday);
+    saveAndRender();
+    
+    document.getElementById('nameInput').value = '';
+    document.getElementById('dateInput').value = '';
+}
 
-    // Define the Google Calendar Event
+function calculateDays(dateStr) {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const parts = dateStr.split('-');
+    let next = new Date(today.getFullYear(), parts[1]-1, parts[2]);
+    if (next < today) next.setFullYear(today.getFullYear() + 1);
+    return Math.ceil((next - today) / (1000 * 60 * 60 * 24)) % 365;
+}
+
+function renderBirthdays() {
+    const list = document.getElementById('birthdayList');
+    list.innerHTML = '';
+    const today = new Date();
+
+    // Sort: Soonest birthdays first
+    birthdays.sort((a,b) => calculateDays(a.date) - calculateDays(b.date));
+
+    birthdays.forEach(b => {
+        const daysLeft = calculateDays(b.date);
+        const bParts = b.date.split('-');
+        const isToday = (today.getMonth() + 1 == bParts[1] && today.getDate() == bParts[2]);
+
+        const li = document.createElement('li');
+        if (isToday) {
+            li.classList.add('is-today');
+            triggerEmail(b.name);
+        }
+
+        li.innerHTML = `
+            <div>
+                <strong>${b.name}</strong> 
+                <span class="days-badge">${daysLeft === 0 ? 'Today! 🎂' : daysLeft + ' days left'}</span>
+                <br><small>${b.date}</small>
+            </div>
+            <button onclick="deleteBirthday('${b.id}')" style="background:none; cursor:pointer;">❌</button>
+        `;
+        list.appendChild(li);
+    });
+}
+
+// --- GOOGLE CALENDAR ACTIONS ---
+async function createGoogleEvent(b) {
     const event = {
-        'summary': `${name}'s Birthday 🎂`,
-        'description': 'Automatic reminder set by Birthday Tracker Pro',
-        'start': { 'date': date }, // All-day event
-        'end': { 'date': date },
-        'recurrence': ['RRULE:FREQ=YEARLY'], // Make it repeat every year
+        'summary': `${b.name}'s Birthday 🎂`,
+        'start': { 'date': b.date },
+        'end': { 'date': b.date },
+        'recurrence': ['RRULE:FREQ=YEARLY'],
         'reminders': {
             'useDefault': false,
             'overrides': [
-                // In Google Calendar API for All-Day events:
-                // -360 minutes from the start of the day (00:00) = 06:00 AM on that day.
+                // -360 minutes triggers exactly at 6:00 AM on the day of the event
                 { 'method': 'popup', 'minutes': -360 } 
             ]
         }
     };
 
     try {
-        const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(event)
         });
-
-        if (response.status === 401) {
-            // Token has expired or been revoked
-            accessToken = null;
-            localStorage.removeItem('google_access_token');
-            updateStatusUI(false);
-            alert("Session expired. Please click 'Link Google Account' again to reconnect.");
-        } else if (response.ok) {
-            saveToLocal(name, date);
-            alert(`Set! A 6 AM alarm for ${name} has been added to your phone's calendar.`);
-            renderList();
-            nameInput.value = '';
-            dateInput.value = '';
-        } else {
-            const errorData = await response.json();
-            console.error("Google API Error:", errorData);
-            alert("Could not set alarm. Make sure your Google Console is set to 'Production' mode.");
-        }
-    } catch (err) {
-        console.error("Network Error:", err);
-        alert("Connection failed. Check your internet.");
-    }
+        const data = await res.json();
+        return data.id;
+    } catch (e) { return null; }
 }
 
-// --- UI & STORAGE HELPERS ---
-function updateStatusUI(isLinked) {
-    const dot = document.getElementById('status-dot');
-    const text = document.getElementById('status-text');
-    const btn = document.getElementById('linkBtn');
-
-    if (isLinked) {
-        dot.className = 'dot-green';
-        text.innerText = 'Linked to Phone';
-        btn.innerText = '🔄 Switch Google Account';
-    } else {
-        dot.className = 'dot-red';
-        text.innerText = 'Not Linked to Phone';
-        btn.innerText = '🔗 Link Google Account';
+async function deleteBirthday(id) {
+    const b = birthdays.find(item => item.id === id);
+    if (accessToken && b.calendarEventId) {
+        // Remove from Google Calendar too
+        await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${b.calendarEventId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
     }
+    birthdays = birthdays.filter(item => item.id !== id);
+    saveAndRender();
 }
 
-function saveToLocal(name, date) {
-    let bdays = JSON.parse(localStorage.getItem('saved_bdays')) || [];
-    bdays.push({ name, date, id: Date.now() });
-    localStorage.setItem('saved_bdays', JSON.stringify(bdays));
+function handleSync() {
+    tokenClient.requestAccessToken({prompt: accessToken ? '' : 'select_account'});
 }
 
-function renderList() {
-    const list = JSON.parse(localStorage.getItem('saved_bdays')) || [];
-    const ul = document.getElementById('bdayList');
-    
-    if (list.length === 0) {
-        ul.innerHTML = '<li style="border:none; color:gray;">No alarms set yet.</li>';
-        return;
-    }
+function saveAndRender() {
+    localStorage.setItem('birthdays', JSON.stringify(birthdays));
+    renderBirthdays();
+}
 
-    ul.innerHTML = list.map(b => `
-        <li>
-            <div>
-                <strong>${b.name}</strong><br>
-                <small>6 AM Alarm: ${b.date}</small>
-            </div>
-        </li>
-    `).join('');
+function triggerEmail(name) {
+    const key = `sent_${name}_${new Date().toDateString()}`;
+    if (localStorage.getItem(key)) return;
+
+    emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        name: name,
+        message: `It is ${name}'s birthday! A 6 AM alarm has been set on your linked Google Calendar.`
+    }).then(() => localStorage.setItem(key, "true"));
+}
+
+function testEmail() {
+    triggerEmail("Test User");
+    alert("Test sent! Check your inbox.");
 }
